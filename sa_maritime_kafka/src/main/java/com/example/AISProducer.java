@@ -18,15 +18,13 @@ public class AISProducer extends Thread {
     private CSVReader reader;
     private Properties props;
     private KafkaProducer<String, String> producer;
-    //private final StreamsBuilder builder;
-    private final String TOPIC = "stream-plaintext-input";
 
     public AISProducer(String path) throws IOException, CsvValidationException {
         this.reader = new CSVReader(new FileReader(path));
         this.props = new Properties();
-        this.props.put(StreamsConfig.APPLICATION_ID_CONFIG, "ais-stream");
+        this.props.put(StreamsConfig.APPLICATION_ID_CONFIG, AISProcessorDemo.APP_NAME);
 
-        props.put("bootstrap.servers","localhost:9092");
+        props.put("bootstrap.servers",AISProcessorDemo.BROKER);
         props.put("key.serializer","org.apache.kafka.common.serialization.StringSerializer");
         props.put("value.serializer","org.apache.kafka.common.serialization.StringSerializer");
 
@@ -52,7 +50,7 @@ public class AISProducer extends Thread {
             try {
                 String data_read = this.read();
                 ArrayList<String> data = new ArrayList<String>(Arrays.asList(data_read.split(",")));
-                final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(TOPIC, data.get(2), data_read);
+                final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);
                 producer.send(data_to_publish);
                 Thread.sleep(2000);
             } catch (CsvValidationException e) {

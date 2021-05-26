@@ -1,0 +1,16 @@
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic ais-topic --create --partitions 1 --replication-factor 1
+
+.\bin\windows\kafka-configs.bat --zookeeper localhost:2181 --entity-type topics --entity-name ais-topic --alter --add-config retention.ms=3600000
+
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic change-heading --create --partitions 1 --replication-factor 1
+
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic within-area --create --partitions 1 --replication-factor 1
+
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic trawling-movement --create --partitions 1 --replication-factor 1
+
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic output --create --partitions 1 --replication-factor 1
+
+
+.\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic ais-topic --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+.\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic output --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
