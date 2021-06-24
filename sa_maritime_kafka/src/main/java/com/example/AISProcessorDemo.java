@@ -14,7 +14,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.kstream.Transformer;
 
 
 public class AISProcessorDemo {
@@ -24,13 +26,13 @@ public class AISProcessorDemo {
     static final String WITHIN_AREA_TOPIC = "within-area";
     static final String CHANGE_HEADING_TOPIC = "change-heading";
     static final String TRAWLING_MOVEMENT_TOPIC = "trawling-movement";
-    static final String PATH = "C:/Users/Utente/Desktop/tutorial/tutorial/src/main/java/com/example/ais_brest_synopses.csv";
+    static final String PATH = "C:\\Users\\Utente\\Desktop\\ais_data\\ais_data.csv";
     static final String APP_NAME = "ais-stream";
     static final String BROKER = "localhost:9092";
-    static final float MAX_LAT = 48.335456f;
-    static final float MIN_LAT = 48.044979f;
-    static final float MAX_LOG = -4.879198f;
-    static final float MIN_LOG = -4.545699f;
+    static final float MAX_LAT = 49.335456f;
+    static final float MIN_LAT = 47.044979f;
+    static final float MAX_LOG = -5.879198f;
+    static final float MIN_LOG = -3.545699f;
     
     private static boolean withinAreaCheck(String v, float max_lat, float min_lat, float max_log, float min_log){
 
@@ -61,28 +63,30 @@ public class AISProcessorDemo {
         props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         props.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        // props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
+        props.putIfAbsent(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomExtractor.class.getName());
         try {
             new AISProducer(AISProcessorDemo.PATH);
         } catch (CsvValidationException | IOException e) {
             e.printStackTrace();
         }
-        StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> source = builder.stream(AISProcessorDemo.IN_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
+        StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> source = builder.stream(AISProcessorDemo.IN_TOPIC, Consumed.with(Serdes.String(), Serdes.String()).withTimestampExtractor(new CustomExtractor()));
+        //source.groupByKey().windowedBy(SessionWindows.with(Duration.ofSeconds(2)));
+        Consumer consumer = new Consumer(AISProcessorDemo.BROKER, AISProcessorDemo.APP_NAME, "within-area");
+        
         final KStream<String, String> whitinArea = source.filter((k,v) -> withinAreaCheck(v, AISProcessorDemo.MAX_LAT, AISProcessorDemo.MIN_LAT, AISProcessorDemo.MAX_LOG,AISProcessorDemo.MIN_LOG));
         whitinArea.to(AISProcessorDemo.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, String> headingChange = source.filter((k,v) -> headingChangeCheck(v));
         headingChange.to(AISProcessorDemo.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-        
+    
         KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
         (leftValue, rightValue) -> leftValue, 
-        JoinWindows.of(Duration.ofMillis(1000)),
+        JoinWindows.of(Duration.ofSeconds(300)),
         StreamJoined.with(
             Serdes.String(),
-            Serdes.String(),   
+            Serdes.String(),
             Serdes.String())  
         );
         trawlingMovement.to(AISProcessorDemo.OUT_TOPIC);

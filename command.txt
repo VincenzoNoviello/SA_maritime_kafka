@@ -14,3 +14,5 @@
 .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic ais-topic --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
 
 .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic output --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+.\bin\windows\kafka-topics.bat --zookeeper localhost:2181 --alter --topic ais-topic --config message.timestamp.type=CreateTime
