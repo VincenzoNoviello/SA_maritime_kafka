@@ -50,7 +50,9 @@ public class AISProducer extends Thread {
             try {
                 String data_read = this.read();
                 ArrayList<String> data = new ArrayList<String>(Arrays.asList(data_read.split(",")));
+                //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data.get(6)), data.get(2), data_read);
                 final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);
+                
                 producer.send(data_to_publish);
                 Thread.sleep(2000);
             } catch (CsvValidationException e) {
