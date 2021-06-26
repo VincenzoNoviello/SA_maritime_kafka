@@ -1,21 +1,23 @@
-.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic ais-topic --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic ais-topic --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
-.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic change-heading --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic change-heading --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
-.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic within-area --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic within-area --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
-.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic trawling-movement --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic trawling-movement --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
-.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --topic output --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic output --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic trawl-speed --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
 //comandi consumer
-.\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic ais-topic --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic ais-topic --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true --property print.timestamp=true
 
-.\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic output --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic output --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
 
-.\bin\windows\kafka-topics.bat --zookeeper localhost:2181 --alter --topic ais-topic --config message.timestamp.type=CreateTime
+.\bin\kafka-topics.sh --zookeeper localhost:2181 --alter --topic ais-topic --config message.timestamp.type=CreateTime
 
 
 
-.\bin\windows\kafka-configs.bat --zookeeper localhost:2181 --entity-type topics --entity-name ais-topic --alter --add-config retention.ms=3600000
+.\bin\kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name ais-topic --alter --add-config retention.ms=3600000
 ms=172800000 

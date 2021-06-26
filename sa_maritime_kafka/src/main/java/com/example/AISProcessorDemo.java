@@ -3,10 +3,12 @@ package com.example;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.TimeZone;
 
 import com.opencsv.exceptions.CsvValidationException;
 
@@ -31,13 +33,16 @@ public class AISProcessorDemo {
     static final String WITHIN_AREA_TOPIC = "within-area";
     static final String CHANGE_HEADING_TOPIC = "change-heading";
     static final String TRAWLING_MOVEMENT_TOPIC = "trawling-movement";
-    static final String PATH = "C:\\Users\\vince\\Desktop\\ais_data\\ais_data.csv";
+    static final String TRAWL_SPEED_TOPIC = "trawl-speed";
+    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data.csv";
     static final String APP_NAME = "ais-stream1";
     static final String BROKER = "localhost:9092";
     static final float MAX_LAT = 49.335456f;
     static final float MIN_LAT = 47.044979f;
     static final float MAX_LOG = -5.879198f;
     static final float MIN_LOG = -3.545699f;
+    static final float SPEED_MIN = 1.0f;
+    static final float SPEED_MAX = 9.0f;
     
     private static boolean withinAreaCheck(String v, float max_lat, float min_lat, float max_log, float min_log){
 
@@ -46,6 +51,17 @@ public class AISProcessorDemo {
         Float latitude = Float.parseFloat(data[3]);
 
         if (latitude < max_lat && latitude > min_lat && longitude > max_log && longitude < min_log){
+            return true;
+        } 
+        return false;
+    }
+
+    private static boolean TrawlSpeedCheck(String v, float speed_min, float speed_max){
+
+        final String[] data = v.split(",");
+        Float speed = Float.parseFloat(data[5]);
+
+        if (speed >= speed_min && speed <= speed_max){
             return true;
         } 
         return false;
@@ -61,8 +77,9 @@ public class AISProcessorDemo {
         return false;
     }
 
-    private final static DateTimeFormatter timeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.LONG)
-    .withZone(ZoneId.systemDefault());
+    private final static DateTimeFormatter timeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+    .withLocale(Locale.ITALY)
+    .withZone(ZoneId.ofOffset("UTC", ZoneOffset.ofHours(0)));
     
     public static void main(final String[] args){
         final Properties props = new Properties();
@@ -86,11 +103,15 @@ public class AISProcessorDemo {
         final KStream<String, String> whitinArea = source.filter((k,v) -> withinAreaCheck(v, AISProcessorDemo.MAX_LAT, AISProcessorDemo.MIN_LAT, AISProcessorDemo.MAX_LOG,AISProcessorDemo.MIN_LOG));
         whitinArea.to(AISProcessorDemo.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
+        final KStream<String, String> TrawlSpeed = source.filter((k,v) -> TrawlSpeedCheck(v, AISProcessorDemo.SPEED_MIN, AISProcessorDemo.SPEED_MAX));
+        TrawlSpeed.to(AISProcessorDemo.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+
         final KStream<String, String> headingChange = source.filter((k,v) -> headingChangeCheck(v));
         headingChange.to(AISProcessorDemo.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
     
-        /* KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
-        (leftValue, rightValue) -> leftValue, 
+        /*
+        KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
+        (leftValue, rightValue) -> rightValue, 
         JoinWindows.of(Duration.ofSeconds(300)),
         StreamJoined.with(
             Serdes.String(),
@@ -100,20 +121,21 @@ public class AISProcessorDemo {
         trawlingMovement.to(AISProcessorDemo.OUT_TOPIC);
         */
 
-        builder.stream(AISProcessorDemo.CHANGE_HEADING_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-        .groupByKey()
-        .windowedBy(SessionWindows.with(Duration.ofMinutes(5)).grace(Duration.ofSeconds(30)))
-        .count()
-        .toStream()
-        .map((windowedKey, count) ->  {
-            String start = timeFormatter.format(windowedKey.window().startTime());
-            String end = timeFormatter.format(windowedKey.window().endTime());
-            String sessionInfo = String.format("Session info started: %s ended: %s with count %s", start, end, count);
-            return KeyValue.pair(windowedKey.key(), sessionInfo);
-        })
-        .to(AISProcessorDemo.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-
-
+         
+        builder.stream(AISProcessorDemo.TRAWL_SPEED_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofSeconds(10)))
+            .count()
+            .toStream()
+            .map((windowedKey, count) ->  {
+                String start = timeFormatter.format(windowedKey.window().startTime());
+                String end = timeFormatter.format(windowedKey.window().endTime());
+                //Long start = windowedKey.window().startTime().toEpochMilli();
+                //Long end = windowedKey.window().endTime().toEpochMilli();
+                String sessionInfo = String.format("Session info started: %s ended: %s with count %s", start, end, count);
+                return KeyValue.pair(windowedKey.key(), sessionInfo);
+            })
+            .to(AISProcessorDemo.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
