@@ -2,12 +2,17 @@ package com.example;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
+import java.util.Locale;
 import java.util.Properties;
 
 import com.opencsv.exceptions.CsvValidationException;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -26,8 +31,8 @@ public class AISProcessorDemo {
     static final String WITHIN_AREA_TOPIC = "within-area";
     static final String CHANGE_HEADING_TOPIC = "change-heading";
     static final String TRAWLING_MOVEMENT_TOPIC = "trawling-movement";
-    static final String PATH = "C:\\Users\\Utente\\Desktop\\ais_data\\ais_data.csv";
-    static final String APP_NAME = "ais-stream";
+    static final String PATH = "C:\\Users\\vince\\Desktop\\ais_data\\ais_data.csv";
+    static final String APP_NAME = "ais-stream1";
     static final String BROKER = "localhost:9092";
     static final float MAX_LAT = 49.335456f;
     static final float MIN_LAT = 47.044979f;
@@ -56,6 +61,9 @@ public class AISProcessorDemo {
         return false;
     }
 
+    private final static DateTimeFormatter timeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.LONG)
+    .withZone(ZoneId.systemDefault());
+    
     public static void main(final String[] args){
         final Properties props = new Properties();
         props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, AISProcessorDemo.APP_NAME);
@@ -81,15 +89,32 @@ public class AISProcessorDemo {
         final KStream<String, String> headingChange = source.filter((k,v) -> headingChangeCheck(v));
         headingChange.to(AISProcessorDemo.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
     
-        KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
+        /* KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
         (leftValue, rightValue) -> leftValue, 
         JoinWindows.of(Duration.ofSeconds(300)),
         StreamJoined.with(
             Serdes.String(),
             Serdes.String(),
             Serdes.String())  
-        );
+        ); 
         trawlingMovement.to(AISProcessorDemo.OUT_TOPIC);
+        */
+
+        builder.stream(AISProcessorDemo.CHANGE_HEADING_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
+        .groupByKey()
+        .windowedBy(SessionWindows.with(Duration.ofMinutes(5)).grace(Duration.ofSeconds(30)))
+        .count()
+        .toStream()
+        .map((windowedKey, count) ->  {
+            String start = timeFormatter.format(windowedKey.window().startTime());
+            String end = timeFormatter.format(windowedKey.window().endTime());
+            String sessionInfo = String.format("Session info started: %s ended: %s with count %s", start, end, count);
+            return KeyValue.pair(windowedKey.key(), sessionInfo);
+        })
+        .to(AISProcessorDemo.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+
+
+        
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.cleanUp();
