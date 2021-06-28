@@ -1,5 +1,7 @@
 package com.example;
 
+import com.example.FishingArea;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -43,7 +45,7 @@ public class AISProcessorDemo {
     static final float MIN_LOG = -3.545699f;
     static final float SPEED_MIN = 1.0f;
     static final float SPEED_MAX = 9.0f;
-    
+    static final FishingArea FishingArea = new FishingArea();
     private static boolean withinAreaCheck(String v, float max_lat, float min_lat, float max_log, float min_log){
 
         final String[] data = v.split(",");
@@ -100,7 +102,8 @@ public class AISProcessorDemo {
         //source.groupByKey().windowedBy(SessionWindows.with(Duration.ofSeconds(2)));
         Consumer consumer = new Consumer(AISProcessorDemo.BROKER, AISProcessorDemo.APP_NAME, "within-area");
         
-        final KStream<String, String> whitinArea = source.filter((k,v) -> withinAreaCheck(v, AISProcessorDemo.MAX_LAT, AISProcessorDemo.MIN_LAT, AISProcessorDemo.MAX_LOG,AISProcessorDemo.MIN_LOG));
+        //final KStream<String, String> whitinArea = source.filter((k,v) -> withinAreaCheck(v, AISProcessorDemo.MAX_LAT, AISProcessorDemo.MIN_LAT, AISProcessorDemo.MAX_LOG,AISProcessorDemo.MIN_LOG));
+        final KStream<String, String> whitinArea = source.filter((k,v) -> FishingArea.is_in_FishingArea(v));
         whitinArea.to(AISProcessorDemo.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, String> TrawlSpeed = source.filter((k,v) -> TrawlSpeedCheck(v, AISProcessorDemo.SPEED_MIN, AISProcessorDemo.SPEED_MAX));

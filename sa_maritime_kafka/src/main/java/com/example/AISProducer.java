@@ -8,7 +8,6 @@ import java.util.Properties;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
@@ -39,9 +38,11 @@ public class AISProducer extends Thread {
 
     private String read() throws IOException, CsvValidationException {
         String s[] = this.reader.readNext();
+        
         AISMessage message = new AISMessage(s[0], s[1], s[2], s[3], s[4], s[5], s[6]);
         return message.toString();
     }
+
 
     @Override
     public void run() {
@@ -51,16 +52,37 @@ public class AISProducer extends Thread {
             try {
                 String data_read = this.read();
                 ArrayList<String> data = new ArrayList<String>(Arrays.asList(data_read.split(",")));
-                final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data.get(6)), data.get(2), data_read);
-                //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);
+                ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data.get(6)), data.get(2), data_read);
+                producer.send(data_to_publish);
                 
+                Long timestamp=Long.parseLong(data.get(6));
+                
+                String data_read_next = this.read();
+                while(data_read_next != null){
+                    ArrayList<String> data_next = new ArrayList<String>(Arrays.asList(data_read_next.split(",")));
+                    Long timestamp_next=Long.parseLong(data_next.get(6));
+                    data_to_publish= new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data_next.get(6)), data_next.get(2), data_read_next);
+                    if(timestamp_next.equals(timestamp))
+                    {
+                        producer.send(data_to_publish);
+                    }
+                    else{
+                        break;
+                    }
+                    data_read_next = this.read();
+                }
+                Thread.sleep(2000);
+                System.out.println("2 SECONDI");
+                producer.send(data_to_publish);
+                //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);
                 /*
                 CustomExtractor extractor = new CustomExtractor();
                 ConsumerRecord r = new ConsumerRecord(AISProcessorDemo.IN_TOPIC, 0, 0L, data.get(2), data_read);
                 extractor.extract(r, 1624547605020L);
                 */
-                producer.send(data_to_publish);
-                Thread.sleep(2000);
+                
+                
+
             } catch (CsvValidationException e) {
                 System.out.println(e);
             } catch (IOException e) {
