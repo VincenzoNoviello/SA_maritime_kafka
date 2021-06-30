@@ -2,6 +2,8 @@ bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic ais-topic --create
 
 bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic change-heading --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic change-heading-false --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+
 bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic within-area --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
 bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic trawling-movement --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
@@ -10,10 +12,25 @@ bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic output --create --
 
 bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic trawl-speed --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
 
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic test --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic time-trawl --create --partitions 1 --replication-factor 1 --config message.timestamp.type=CreateTime
+
 //comandi consumer
 bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic ais-topic --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true --property print.timestamp=true
 
 bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic output --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic time-trawl --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic trawl-speed --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true
+
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic trawling-movement --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true --property print.timestamp=true
+
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic change-heading-false --from-beginning --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true --property print.timestamp=true
+
 
 .\bin\kafka-topics.sh --zookeeper localhost:2181 --alter --topic ais-topic --config message.timestamp.type=CreateTime
 
@@ -21,3 +38,9 @@ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic output -
 
 .\bin\kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name ais-topic --alter --add-config retention.ms=3600000
 ms=172800000 
+
+
+
+bin/zookeeper-server-start.sh config/zookeeper.properties
+
+bin/kafka-server-start.sh config/server.properties

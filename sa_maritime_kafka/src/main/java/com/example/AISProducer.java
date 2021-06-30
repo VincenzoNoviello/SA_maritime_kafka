@@ -2,8 +2,6 @@ package com.example;
 
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Properties;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
@@ -17,7 +15,7 @@ public class AISProducer extends Thread {
 
     private CSVReader reader;
     private Properties props;
-    private KafkaProducer<String, String> producer;
+    private KafkaProducer<String, AISMessage> producer;
 
     public AISProducer(String path) throws IOException, CsvValidationException {
         this.reader = new CSVReader(new FileReader(path));
@@ -26,7 +24,8 @@ public class AISProducer extends Thread {
         this.props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomExtractor.class.getName());
         this.props.put("bootstrap.servers",AISProcessorDemo.BROKER);
         this.props.put("key.serializer","org.apache.kafka.common.serialization.StringSerializer");
-        this.props.put("value.serializer","org.apache.kafka.common.serialization.StringSerializer");
+        this.props.put("value.serializer","com.example.AISMessageSerializer");
+        this.props.put("value.deserializer","com.example.AISMessageDeserializer");
 
         this.producer = new KafkaProducer<>(this.props);
         System.out.println(this.reader);
@@ -36,32 +35,42 @@ public class AISProducer extends Thread {
         super.start();
     }
 
-    private String read() throws IOException, CsvValidationException {
-        String s[] = this.reader.readNext();
+    private AISMessage read() throws IOException, CsvValidationException {
+        String s[] = this.reader.readNextSilently();
+        AISMessage message;
+        //System.out.println(s);
         
-        AISMessage message = new AISMessage(s[0], s[1], s[2], s[3], s[4], s[5], s[6]);
-        return message.toString();
+        message = new AISMessage(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]);
+
+        return message;
     }
 
 
     @Override
     public void run() {
         //int i = 0;
+        try {
+            this.reader.skip(26000);
+        } catch (IOException e1) {
+            
+            e1.printStackTrace();
+        }
+
         while (true){
             //i++;
             try {
-                String data_read = this.read();
-                ArrayList<String> data = new ArrayList<String>(Arrays.asList(data_read.split(",")));
-                ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data.get(6)), data.get(2), data_read);
+
+                AISMessage message = this.read();
+                ProducerRecord<String, AISMessage> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(message.getTimestamp()), message.getId(), message);
                 producer.send(data_to_publish);
                 
-                Long timestamp=Long.parseLong(data.get(6));
+                Long timestamp=Long.parseLong(message.getTimestamp());
                 
-                String data_read_next = this.read();
-                while(data_read_next != null){
-                    ArrayList<String> data_next = new ArrayList<String>(Arrays.asList(data_read_next.split(",")));
-                    Long timestamp_next=Long.parseLong(data_next.get(6));
-                    data_to_publish= new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(data_next.get(6)), data_next.get(2), data_read_next);
+                AISMessage message_next = this.read();
+                while(message_next != null){
+                    
+                    Long timestamp_next=Long.parseLong(message_next.getTimestamp());
+                    data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, 0, Long.parseLong(message_next.getTimestamp()), message_next.getId(), message_next);
                     if(timestamp_next.equals(timestamp))
                     {
                         producer.send(data_to_publish);
@@ -69,10 +78,10 @@ public class AISProducer extends Thread {
                     else{
                         break;
                     }
-                    data_read_next = this.read();
+                    message_next = this.read();
                 }
-                Thread.sleep(2000);
-                System.out.println("2 SECONDI");
+                Thread.sleep(500);
+                //System.out.println("2 SECONDI");
                 producer.send(data_to_publish);
                 //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);
                 /*

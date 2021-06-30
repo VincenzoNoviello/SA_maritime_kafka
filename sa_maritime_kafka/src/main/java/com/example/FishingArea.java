@@ -23,6 +23,7 @@ public class FishingArea {
     
     private File file;
     private SimpleFeatureCollection collection;
+    private GeometryFactory geometryFactory;
 
     public FishingArea(){
         this.file = new File("/home/mivia/Desktop/ais_data/v_recode_fish_area_clean.shp");
@@ -37,28 +38,28 @@ public class FishingArea {
             System.out.println("Reading content : " + typeName);
             SimpleFeatureSource featureSource = dataStore.getFeatureSource(typeName);
             this.collection = featureSource.getFeatures();
+            geometryFactory = JTSFactoryFinder.getGeometryFactory();
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         
     }
 
-    public boolean is_in_FishingArea(String v){
-        final String[] data = v.split(",");
-        String Longitude = data[4];
-        String Latitude = data[3];
+    public boolean is_in_FishingArea(AISMessage v){
+        
+        String Longitude = v.getLongitude();
+        String Latitude = v.getLatitude();
 
         SimpleFeatureIterator iterator = this.collection.features();
-        GeometryFactory geometryFactory = JTSFactoryFinder.getGeometryFactory();
+        
         boolean is_in = false;
         try {
             while (iterator.hasNext()) {
                 SimpleFeature feature = iterator.next();
                 Geometry polygon= (Geometry)feature.getDefaultGeometry();
-                org.locationtech.jts.geom.Point point = geometryFactory.createPoint(new Coordinate(Double.parseDouble(Longitude),Double.parseDouble(Latitude)));
+                org.locationtech.jts.geom.Point point = this.geometryFactory.createPoint(new Coordinate(Double.parseDouble(Longitude),Double.parseDouble(Latitude)));
                 if(polygon.contains(point)){
-                    System.out.println("sono nell'area");
+                    //System.out.println("sono nell'area");
                     return true;
                 }else{
 

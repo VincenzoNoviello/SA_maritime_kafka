@@ -1,67 +1,76 @@
 package com.example;
 
-import com.example.FishingArea;
-
 import java.io.IOException;
 import java.time.Duration;
-import java.time.ZoneId;
+/* import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.Locale;
+import java.util.TimeZone; */
 import java.util.Properties;
-import java.util.TimeZone;
+
 
 import com.opencsv.exceptions.CsvValidationException;
 
+import org.apache.kafka.common.protocol.types.Field.Str;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
+
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+
 
 
 public class AISProcessorDemo {
-
     static final String IN_TOPIC = "ais-topic";
     static final String OUT_TOPIC = "output";
     static final String WITHIN_AREA_TOPIC = "within-area";
     static final String CHANGE_HEADING_TOPIC = "change-heading";
+    static final String CHANGE_HEADING_FALSE_TOPIC = "change-heading-false";
     static final String TRAWLING_MOVEMENT_TOPIC = "trawling-movement";
     static final String TRAWL_SPEED_TOPIC = "trawl-speed";
-    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data.csv";
-    static final String APP_NAME = "ais-stream1";
+    static final String TIME_TRAWL_TOPIC = "time-trawl";
+    static final String TEST = "test";
+    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_types.csv";
+    static final String APP_NAME = "ais-stream";
     static final String BROKER = "localhost:9092";
-    static final float MAX_LAT = 49.335456f;
-    static final float MIN_LAT = 47.044979f;
-    static final float MAX_LOG = -5.879198f;
-    static final float MIN_LOG = -3.545699f;
     static final float SPEED_MIN = 1.0f;
     static final float SPEED_MAX = 9.0f;
     static final FishingArea FishingArea = new FishingArea();
-    private static boolean withinAreaCheck(String v, float max_lat, float min_lat, float max_log, float min_log){
+   
+    
 
-        final String[] data = v.split(",");
-        Float longitude = Float.parseFloat(data[4]);
-        Float latitude = Float.parseFloat(data[3]);
 
-        if (latitude < max_lat && latitude > min_lat && longitude > max_log && longitude < min_log){
+
+    private static boolean TypeshipCheck(AISMessage v){
+        String type = v.getType();
+        if ( type.equals("FISHING")){
             return true;
-        } 
+        }
         return false;
+        
     }
 
-    private static boolean TrawlSpeedCheck(String v, float speed_min, float speed_max){
+    private static boolean TrawlSpeedCheck(AISMessage v, float speed_min, float speed_max){
 
-        final String[] data = v.split(",");
-        Float speed = Float.parseFloat(data[5]);
+        Float speed = Float.parseFloat(v.getSpeed());
 
         if (speed >= speed_min && speed <= speed_max){
             return true;
@@ -69,19 +78,28 @@ public class AISProcessorDemo {
         return false;
     }
 
-    private static boolean headingChangeCheck(String v){
+    private static boolean headingChangeCheck(AISMessage v){
 
-        final String[] data = v.split(",");
-        String annotation = data[0];
+        String annotation = v.getAnnotation();
         if (annotation.charAt(2) == '1'){
             return true;
         }
         return false;
     }
 
-    private final static DateTimeFormatter timeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+    private static boolean TimeCheck(String v,Duration timeDuration){
+
+        final String[] data = v.split(",");
+        Long diff = Long.parseLong(data[2]);
+        if (diff >= timeDuration.toMillis()){
+            return true;
+        }
+        return false;
+    }
+
+    /* private final static DateTimeFormatter timeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
     .withLocale(Locale.ITALY)
-    .withZone(ZoneId.ofOffset("UTC", ZoneOffset.ofHours(0)));
+    .withZone(ZoneId.ofOffset("UTC", ZoneOffset.ofHours(0))); */
     
     public static void main(final String[] args){
         final Properties props = new Properties();
@@ -98,49 +116,214 @@ public class AISProcessorDemo {
         }
 
         StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> source = builder.stream(AISProcessorDemo.IN_TOPIC, Consumed.with(Serdes.String(), Serdes.String()).withTimestampExtractor(new CustomExtractor()));
-        //source.groupByKey().windowedBy(SessionWindows.with(Duration.ofSeconds(2)));
-        Consumer consumer = new Consumer(AISProcessorDemo.BROKER, AISProcessorDemo.APP_NAME, "within-area");
+
+        Topology topology = new Topology();
+
         
-        //final KStream<String, String> whitinArea = source.filter((k,v) -> withinAreaCheck(v, AISProcessorDemo.MAX_LAT, AISProcessorDemo.MIN_LAT, AISProcessorDemo.MAX_LOG,AISProcessorDemo.MIN_LOG));
-        final KStream<String, String> whitinArea = source.filter((k,v) -> FishingArea.is_in_FishingArea(v));
-        whitinArea.to(AISProcessorDemo.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        
+        
 
-        final KStream<String, String> TrawlSpeed = source.filter((k,v) -> TrawlSpeedCheck(v, AISProcessorDemo.SPEED_MIN, AISProcessorDemo.SPEED_MAX));
-        TrawlSpeed.to(AISProcessorDemo.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        final KStream<String, AISMessage> source = builder.stream(AISProcessorDemo.IN_TOPIC, Consumed.with(Serdes.String(), AISSerders.AISMessage()).withTimestampExtractor(new CustomExtractor()));
+        final KStream<String, AISMessage> sourceFishing = source.filter((k,v) -> AISProcessorDemo.TypeshipCheck(v));
+        //sourceFishing.to(AISProcessorDemo.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));
 
-        final KStream<String, String> headingChange = source.filter((k,v) -> headingChangeCheck(v));
-        headingChange.to(AISProcessorDemo.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-    
-        /*
-        KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
+        
+
+
+
+        final KStream<String, AISMessage> whitinArea = sourceFishing.filter((k,v) -> FishingArea.is_in_FishingArea(v));
+        whitinArea.to(AISProcessorDemo.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), AISSerders.AISMessage()));
+
+        final KStream<String, AISMessage> TrawlSpeed = sourceFishing.filter((k,v) -> TrawlSpeedCheck(v, AISProcessorDemo.SPEED_MIN, AISProcessorDemo.SPEED_MAX));
+        TrawlSpeed.to(AISProcessorDemo.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), AISSerders.AISMessage()));
+
+        final KStream<String, AISMessage> headingChange = sourceFishing.filter((k,v) -> headingChangeCheck(v));
+        headingChange.to(AISProcessorDemo.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), AISSerders.AISMessage()));
+
+
+        topology.addSource("source",AISProcessorDemo.CHANGE_HEADING_TOPIC)
+            .addProcessor("ProcessorHeading", new AISProcessorSupplier(), "source")
+            .addSink("result",AISProcessorDemo.TEST,"ProcessorHeading");
+        
+        
+        // create store
+        StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+        Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("Heading_sequence"),
+            Serdes.String(),
+            Serdes.String());
+        // add store
+        builder.addStateStore(keyValueStoreBuilder);
+
+        topology.addProcessor(AISProcessorDemo.TEST, new AISProcessorSupplier(), AISProcessorDemo.CHANGE_HEADING_TOPIC);
+
+       
+        final KStream<String, AISMessage> headingChange_false = sourceFishing.filter((k,v) -> !headingChangeCheck(v));
+        headingChange_false.to(AISProcessorDemo.CHANGE_HEADING_FALSE_TOPIC, Produced.with(Serdes.String(), AISSerders.AISMessage()));
+
+            
+        final KStream<String, String> headingChange_window =builder.stream(AISProcessorDemo.CHANGE_HEADING_TOPIC, Consumed.with(Serdes.String(), AISSerders.AISMessage()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofMinutes(10)).grace(Duration.ofMinutes(1)))
+            .count()
+            //.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+            .toStream()
+            .map((windowedKey, count) ->  {
+                //String start = timeFormatter.format(windowedKey.window().startTime());
+                //String end = timeFormatter.format(windowedKey.window().endTime());
+                Long start = windowedKey.window().startTime().toEpochMilli();
+                Long end = windowedKey.window().endTime().toEpochMilli();
+                Long diff = end - start;
+                String sessionInfo = String.format("%s,%s,%s,%s", Long.toString(start), Long.toString(end),Long.toString(diff), Long.toString(count));
+                return KeyValue.pair(windowedKey.key(), sessionInfo);
+            });
+        headingChange_window.to(AISProcessorDemo.TEST, Produced.with(Serdes.String(), Serdes.String()));
+
+        
+        final KStream<String, String> headingChange_window_false =builder.stream(AISProcessorDemo.CHANGE_HEADING_FALSE_TOPIC, Consumed.with(Serdes.String(), AISSerders.AISMessage()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofMinutes(10)).grace(Duration.ofMinutes(1)))
+            .count()
+            //.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+            .toStream()
+            .map((windowedKey, count) ->  {
+                //String start = timeFormatter.format(windowedKey.window().startTime());
+                //String end = timeFormatter.format(windowedKey.window().endTime());
+                Long start = windowedKey.window().startTime().toEpochMilli();
+                Long end = windowedKey.window().endTime().toEpochMilli();
+                Long diff = end - start;
+                String sessionInfo = String.format("%s,%s,%s,%s", Long.toString(start), Long.toString(end),Long.toString(diff), Long.toString(count));
+                return KeyValue.pair(windowedKey.key(), sessionInfo);
+            });
+        headingChange_window_false.to(AISProcessorDemo.TRAWLING_MOVEMENT_TOPIC,Produced.with(Serdes.String(),Serdes.String()));
+
+        KStream<String, String> trawling = headingChange_window.join(headingChange_window_false,
+            new ValueJoiner<String,String,String>(){
+                @Override
+                public String apply(String value1, String value2) {
+                    
+                    final String[] value_1_data = value1.split(",");
+                    final String[] value_2_data = value2.split(",");
+                    Long time_1_start = Long.parseLong(value_1_data[0]);
+                    Long time_1_end = Long.parseLong(value_1_data[1]);
+                    Long time_2_end = Long.parseLong(value_2_data[1]);
+                    
+                    Long result_end = Math.min(time_1_end, time_2_end);
+                    return String.format("%s,%s",Long.toString(time_1_start),Long.toString(result_end));
+                };
+            }, 
+            JoinWindows.of(Duration.ofMillis(1000)),
+            StreamJoined.with(
+                Serdes.String(),
+                Serdes.String(),
+                Serdes.String())  
+            );
+            trawling.to(AISProcessorDemo.OUT_TOPIC,Produced.with(Serdes.String(), Serdes.String()));
+/*
+
+        KStream<String, AISMessage> trawlingMovement = whitinArea.join(headingChange,
         (leftValue, rightValue) -> rightValue, 
-        JoinWindows.of(Duration.ofSeconds(300)),
+        JoinWindows.of(Duration.ofMillis(1000)),
+        StreamJoined.with(
+            Serdes.String(),
+            AISSerders.AISMessage(),
+            AISSerders.AISMessage())  
+        );
+        //trawlingMovement.to(AISProcessorDemo.TRAWLING_MOVEMENT_TOPIC);
+
+        KStream<String, AISMessage> trawling = TrawlSpeed.join(trawlingMovement,
+        (leftValue, rightValue) -> rightValue, 
+        JoinWindows.of(Duration.ofMillis(1000)),
+        StreamJoined.with(
+            Serdes.String(),
+            AISSerders.AISMessage(),
+            AISSerders.AISMessage())  
+        ); 
+        trawling.to(AISProcessorDemo.TRAWLING_MOVEMENT_TOPIC,Produced.with(Serdes.String(), AISSerders.AISMessage()));
+
+        /* final KStream<Windowed<String>, String> TrawlingWindowTEST =builder.stream(AISProcessorDemo.TRAWLING_MOVEMENT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofMinutes(10)).grace(Duration.ofMinutes(1)))
+            .reduce(new Reducer<String>() {
+                
+                @Override
+                public String apply(String savedValue, String currValue) {
+                  return currValue;
+                }
+              })
+            .toStream();
+ 
+
+        final KStream<String, String> TrawlingWindow =builder.stream(AISProcessorDemo.TRAWLING_MOVEMENT_TOPIC, Consumed.with(Serdes.String(), AISSerders.AISMessage()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofMinutes(10)).grace(Duration.ofMinutes(1)))
+            .count()
+            .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+            .toStream()
+            .map((windowedKey, count) ->  {
+                //String start = timeFormatter.format(windowedKey.window().startTime());
+                //String end = timeFormatter.format(windowedKey.window().endTime());
+                Long start = windowedKey.window().startTime().toEpochMilli();
+                Long end = windowedKey.window().endTime().toEpochMilli();
+                Long diff = end - start;
+                String sessionInfo = String.format("%s,%s,%s,%s", Long.toString(start), Long.toString(end),Long.toString(diff), Long.toString(count));
+                return KeyValue.pair(windowedKey.key(), sessionInfo);
+            });
+
+            //.to(AISProcessorDemo.TEST, Produced.with(Serdes.String(), Serdes.String()));
+
+
+        final KStream<String, String> TimeTrawlingCheck= TrawlingWindow.filter((k,v) -> TimeCheck(v,Duration.ofMinutes(10)));
+        TimeTrawlingCheck.to(AISProcessorDemo.TIME_TRAWL_TOPIC,Produced.with(Serdes.String(), Serdes.String()));
+
+         */
+        
+        /* final KStream<String, String> TrawlingSpeedWindow =builder.stream(AISProcessorDemo.TRAWL_SPEED_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
+        .groupByKey()
+        .windowedBy(SessionWindows.with(Duration.ofHours(1)).grace(Duration.ofMinutes(10)))
+        .count()
+        .suppress(Suppressed.untilTimeLimit(Duration.ofHours(1), Suppressed.BufferConfig.unbounded()))
+        //.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
+        .map((windowedKey, count) ->  {
+            //String start = timeFormatter.format(windowedKey.window().startTime());
+            //String end = timeFormatter.format(windowedKey.window().endTime());
+            Long start = windowedKey.window().startTime().toEpochMilli();
+            Long end = windowedKey.window().endTime().toEpochMilli();
+            Long diff = end - start;
+            String sessionInfo = String.format("%s,%s,%s,%s", Long.toString(start), Long.toString(end),Long.toString(diff), Long.toString(count));
+            return KeyValue.pair(windowedKey.key(), sessionInfo);
+        }); 
+        final KStream<String, String> TrawlingSpeedWindowCheck= TrawlingSpeedWindow.filter((k,v) -> TimeCheck(v,Duration.ofHours(1)));
+        TrawlingSpeedWindowCheck.to(AISProcessorDemo.TEST,Produced.with(Serdes.String(), Serdes.String()));
+        */
+
+        
+
+        /* KStream<String, String> trawling = TimeTrawlingMovementCheck.join(TrawlingSpeedWindowCheck,
+        new ValueJoiner<String,String,String>(){
+            @Override
+            public String apply(String value1, String value2) {
+                final String[] value_1_data = value1.split(",");
+                final String[] value_2_data = value2.split(",");
+                Long time_1_start = Long.parseLong(value_1_data[0]);
+                Long time_2_start = Long.parseLong(value_2_data[0]);
+                Long time_1_end = Long.parseLong(value_1_data[1]);
+                Long time_2_end = Long.parseLong(value_2_data[1]);
+                Long result_start = Math.max(time_1_start, time_2_start);
+                Long result_end = Math.max(time_1_end, time_2_end);
+                return String.format("%s,%s,%s",Long.toString(result_start),Long.toString(result_end),Long.toString(result_end-result_start));
+                
+            };
+        }, 
+        JoinWindows.of(Duration.ofMillis(1000)),
         StreamJoined.with(
             Serdes.String(),
             Serdes.String(),
             Serdes.String())  
-        ); 
-        trawlingMovement.to(AISProcessorDemo.OUT_TOPIC);
-        */
+        );
+        trawling.to(AISProcessorDemo.OUT_TOPIC,Produced.with(Serdes.String(), Serdes.String()));
 
-         
-        builder.stream(AISProcessorDemo.TRAWL_SPEED_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(SessionWindows.with(Duration.ofSeconds(10)))
-            .count()
-            .toStream()
-            .map((windowedKey, count) ->  {
-                String start = timeFormatter.format(windowedKey.window().startTime());
-                String end = timeFormatter.format(windowedKey.window().endTime());
-                //Long start = windowedKey.window().startTime().toEpochMilli();
-                //Long end = windowedKey.window().endTime().toEpochMilli();
-                String sessionInfo = String.format("Session info started: %s ended: %s with count %s", start, end, count);
-                return KeyValue.pair(windowedKey.key(), sessionInfo);
-            })
-            .to(AISProcessorDemo.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-        
-
+         */
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.cleanUp();
         streams.start();

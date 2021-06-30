@@ -1,9 +1,4 @@
 com/example/AISProducer.class
-com/example/AISProcessorWithinArea.class
 com/example/CustomExtractor.class
-com/example/ProcessorWithinArea.class
-com/example/AISProcessorHeadingChange.class
-com/example/Consumer.class
-com/example/ProcessorHeadingChange.class
 com/example/AISProcessorDemo.class
 com/example/AISMessage.class

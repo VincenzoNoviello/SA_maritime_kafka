@@ -9,9 +9,10 @@ public class AISMessage {
     private String annotation;
     private String speed;
     private String heading;
+    private String type;
     
     public AISMessage(String id, String timestamp, String longitude, String latitude, String annotation, String speed,
-            String heading) {
+            String heading,String type) {
         this.id = id;
         this.timestamp = timestamp;
         this.longitude = longitude;
@@ -19,11 +20,17 @@ public class AISMessage {
         this.annotation = annotation;
         this.speed = speed;
         this.heading = heading;
+        this.type = type;
     }
+
+    public AISMessage(){
+
+    }
+    
     @Override
     public String toString() {
         return annotation + "," + heading + "," + id + "," + latitude
-                + "," + longitude + "," + speed + "," + timestamp;
+                + "," + longitude + "," + speed + "," + timestamp + "," + type;
     }
     public String getId() {
         return id;
@@ -66,6 +73,10 @@ public class AISMessage {
     }
     public void setHeading(String heading) {
         this.heading = heading;
+    }
+
+    public String getType(){
+        return type;
     }
 
 }
