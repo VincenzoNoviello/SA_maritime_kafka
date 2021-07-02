@@ -2,12 +2,6 @@ package com.example;
 
 import java.io.IOException;
 import java.time.Duration;
-/* import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
-import java.util.Locale;
-import java.util.TimeZone; */
 import java.util.Properties;
 
 
@@ -140,26 +134,23 @@ public class Application {
         builder.addStateStore(keyValueStoreBuilder_trawlSpeed);
 
       
-        //
+        //STREAM SOURCE
         final KStream<String, AISMessage> source = builder.stream(Application.IN_TOPIC, 
             Consumed.with(Serdes.String(),
             AISSerders.AISMessage()).withTimestampExtractor(new CustomExtractor()).withName(Application.IN_TOPIC));
         
         //FILTER FISHING VESSEL
         final KStream<String, AISMessage> sourceFishing = source.filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
-        // sourceFishing.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
-      
-        //STREAM FILTER VESSEL WHITHIN AREA
+        
+        // WHITHIN AREA TRANSFORMER
         final KStream<String, String> whitinArea = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
                 return new WindowTransfWithinArea();
             }
-            
         }, Named.as("processor_whithinArea") ,"whithinArea_store");
-        whitinArea.to(Application.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-
-
+        
+        //HEADING CHANGE TRANSFORMER
         final KStream<String, String> headingChange = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
@@ -167,16 +158,12 @@ public class Application {
             }
             
         }, Named.as("processor_heading") ,"heading_store");
-        headingChange.to(Application.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-
-        KStream<String, String> trawlingMovement = whitinArea.join(headingChange,
-        windowJoiner, 
-        JoinWindows.of(Duration.ofMillis(1000)),
-        StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join")
-        );
         
-        //trawlingMovement.to(Application.TRAWLING_MOVEMENT_TOPIC);
-        //TrawlingMovement.filter((k,v) -> v != null)
+        //TRAWILING MOVEMENT JOIN
+        KStream<String, String> trawlingMovement = whitinArea.join(headingChange,windowJoiner, 
+        JoinWindows.of(Duration.ofMillis(1000)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join"));
+        
+        //FILTER TRAWILING MOVEMENT WINDOW WITH LESS THAN 10 MINUTE
         KStream<String, String> trawlingMovement_filter = trawlingMovement.filter(new Predicate<String,String>(){
             @Override
             public boolean test(String key, String value) {
@@ -187,13 +174,9 @@ public class Application {
                     return true;
                 return false;
             }
-            
         });
 
-        trawlingMovement_filter.to(Application.TRAWLING_MOVEMENT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-        
-    
-        //WINDOW FOR EVALUATE TRAWLSPEED 
+        //TRAWLSPEED TRANSFORMER
         final KStream<String, String> trawlSpeed = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
@@ -202,15 +185,17 @@ public class Application {
             
         }, Named.as("processor_speed") ,"trawlSpeed_store");
 
-        //FILTER NULL
-        trawlSpeed.filter((k,v) -> v != null)
-        .to(Application.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-
+        //TRAWLING JOIN
         KStream<String, String> trawling = trawlSpeed.join(trawlingMovement_filter,windowJoiner, 
-        JoinWindows.of(Duration.ofMillis(1000)),
-        StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join")  
-        );
+        JoinWindows.of(Duration.ofMillis(1000)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join"));
         trawling.to(Application.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        
+        
+        sourceFishing.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
+        trawlSpeed.filter((k,v) -> v != null).to(Application.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        trawlingMovement_filter.to(Application.TRAWLING_MOVEMENT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        whitinArea.to(Application.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        headingChange.to(Application.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         return builder.build(props);
 
