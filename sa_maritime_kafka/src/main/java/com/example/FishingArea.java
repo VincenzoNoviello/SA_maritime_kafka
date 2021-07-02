@@ -10,11 +10,10 @@ import org.geotools.data.simple.SimpleFeatureCollection;
 import org.geotools.data.simple.SimpleFeatureIterator;
 import org.geotools.data.simple.SimpleFeatureSource;
 import org.geotools.geometry.jts.JTSFactoryFinder;
-
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
-
+import org.locationtech.jts.geom.Point;
 import org.opengis.feature.simple.SimpleFeature;
 
 
@@ -24,7 +23,8 @@ public class FishingArea {
     private File file;
     private SimpleFeatureCollection collection;
     private GeometryFactory geometryFactory;
-
+    
+   
     public FishingArea(){
         this.file = new File("/home/mivia/Desktop/ais_data/v_recode_fish_area_clean.shp");
         Map<String, String> connect = new HashMap<String, String>();
@@ -51,15 +51,14 @@ public class FishingArea {
         String Latitude = v.getLatitude();
 
         SimpleFeatureIterator iterator = this.collection.features();
-        
+        Point point = this.geometryFactory.createPoint(new Coordinate(Double.parseDouble(Longitude),Double.parseDouble(Latitude)));
         boolean is_in = false;
         try {
             while (iterator.hasNext()) {
                 SimpleFeature feature = iterator.next();
                 Geometry polygon= (Geometry)feature.getDefaultGeometry();
-                org.locationtech.jts.geom.Point point = this.geometryFactory.createPoint(new Coordinate(Double.parseDouble(Longitude),Double.parseDouble(Latitude)));
                 if(polygon.contains(point)){
-                    //System.out.println("sono nell'area");
+                    System.out.println("sono nell'area "+v.getId());
                     return true;
                 }else{
 

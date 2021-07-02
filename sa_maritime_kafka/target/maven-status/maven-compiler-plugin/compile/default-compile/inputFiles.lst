@@ -3,6 +3,9 @@
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/CustomExtractor.java
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISMessageSerializer.java
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISSerders.java
+/home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISProcessorDemo_copy.java
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISProcessorDemo.java
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/FishingArea.java
 /home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISProducer.java
+/home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISProcessor.java
+/home/mivia/Desktop/SA_maritime_kafka/sa_maritime_kafka/src/main/java/com/example/AISProcessorSupplier.java
