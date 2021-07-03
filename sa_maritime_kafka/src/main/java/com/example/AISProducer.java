@@ -39,8 +39,8 @@ public class AISProducer extends Thread {
         AISMessage message;
         //System.out.println(s);
         
-        //message = new AISMessage(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]);
-        message = new AISMessage(s[3], s[2], s[0], s[1], s[4], s[5], s[6], s[7]);
+        message = new AISMessage(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]);
+        //message = new AISMessage(s[3], s[2], s[0], s[1], s[4], s[5], s[6], s[7]);
         
         return message;
     }
@@ -72,7 +72,7 @@ public class AISProducer extends Thread {
                     }
                     message_next = this.read();
                 }
-                Thread.sleep(500);
+                Thread.sleep(1000);
                 //System.out.println("2 SECONDI");
                 producer.send(data_to_publish);
                 //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);

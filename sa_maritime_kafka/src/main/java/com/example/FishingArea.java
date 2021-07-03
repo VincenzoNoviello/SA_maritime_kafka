@@ -58,7 +58,7 @@ public class FishingArea {
                 SimpleFeature feature = iterator.next();
                 Geometry polygon= (Geometry)feature.getDefaultGeometry();
                 if(polygon.contains(point)){
-                    System.out.println("sono nell'area "+v.getId());
+                    //System.out.println("sono nell'area "+v.getId());
                     return true;
                 }else{
 

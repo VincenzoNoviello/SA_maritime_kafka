@@ -41,8 +41,9 @@ public class Application {
     static final String TRAWLING_MOVEMENT_TOPIC = "trawling-movement";
     static final String TRAWL_SPEED_TOPIC = "trawl-speed";
     static final String TIME_TRAWL_TOPIC = "time-trawl";
+    static final String TRAWLING_RESULT_TOPIC = "trawling-result";
     static final String TEST = "test";
-    static final String PATH = "/home/mivia/Desktop/ais_data/trawling_test.csv";
+    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_type_test_4.csv";
     static final String APP_NAME = "ais-stream";
     static final String BROKER = "localhost:9092";
   
@@ -133,17 +134,24 @@ public class Application {
                  Serdes.String());
         builder.addStateStore(keyValueStoreBuilder_trawlSpeed);
 
+        StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder_trawling_result =
+        Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("trawling_result_store"),
+                 Serdes.String(),
+                 Serdes.String());
+        builder.addStateStore(keyValueStoreBuilder_trawling_result);
+
       
         //STREAM SOURCE
         final KStream<String, AISMessage> source = builder.stream(Application.IN_TOPIC, 
-            Consumed.with(Serdes.String(),
-            AISSerders.AISMessage()).withTimestampExtractor(new CustomExtractor()).withName(Application.IN_TOPIC));
+            Consumed.with(Serdes.String(),AISSerders.AISMessage())
+            .withTimestampExtractor(new CustomExtractor()).withName(Application.IN_TOPIC))
+            .filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
         
         //FILTER FISHING VESSEL
-        final KStream<String, AISMessage> sourceFishing = source.filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
+        //final KStream<String, AISMessage> sourceFishing = source.filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
         
         // WHITHIN AREA TRANSFORMER
-        final KStream<String, String> whitinArea = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
+        final KStream<String, String> whitinArea = source.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
                 return new WindowTransfWithinArea();
@@ -151,7 +159,7 @@ public class Application {
         }, Named.as("processor_whithinArea") ,"whithinArea_store");
         
         //HEADING CHANGE TRANSFORMER
-        final KStream<String, String> headingChange = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
+        final KStream<String, String> headingChange = source.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
                 return new WindowTransfChangeHeading();
@@ -177,7 +185,7 @@ public class Application {
         });
 
         //TRAWLSPEED TRANSFORMER
-        final KStream<String, String> trawlSpeed = sourceFishing.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
+        final KStream<String, String> trawlSpeed = source.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
             @Override
             public Transformer<String, AISMessage, KeyValue<String,String>> get() {
                 return new WindowTransfTrawlSpeed();
@@ -188,14 +196,33 @@ public class Application {
         //TRAWLING JOIN
         KStream<String, String> trawling = trawlSpeed.join(trawlingMovement_filter,windowJoiner, 
         JoinWindows.of(Duration.ofMillis(1000)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join"));
+        
         trawling.to(Application.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-        
-        
-        sourceFishing.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
+        source.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
         trawlSpeed.filter((k,v) -> v != null).to(Application.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         trawlingMovement_filter.to(Application.TRAWLING_MOVEMENT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         whitinArea.to(Application.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         headingChange.to(Application.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+
+        //TRAWLSPEED TRANSFORMER
+        final KStream<String, String> trawling_result = trawling.transform(new TransformerSupplier<String,String,KeyValue<String,String>>(){
+            @Override
+            public Transformer<String, String, KeyValue<String,String>> get() {
+                return new WindowResultTrawling();
+            }
+            
+        }, Named.as("trawling_result") ,"trawling_result_store");
+        trawling_result.filter((k,v) -> v != null).filter(new Predicate<String,String>(){
+            @Override
+            public boolean test(String key, String value) {
+                final String[] data = value.split(",");
+                Long startTimestamp = Long.parseLong(data[0]);
+                Long endTimestamp = Long.parseLong(data[1]);
+                if(endTimestamp-startTimestamp>= Duration.ofMinutes(60).toMillis())
+                    return true;
+                return false;
+            }
+        }).to(Application.TRAWLING_RESULT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         return builder.build(props);
 

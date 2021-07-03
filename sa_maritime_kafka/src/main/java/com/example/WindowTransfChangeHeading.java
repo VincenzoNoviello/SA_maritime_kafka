@@ -63,7 +63,7 @@ public class WindowTransfChangeHeading implements Transformer<String, AISMessage
                 else{
                     new_value =String.format(currTimestamp.toString() + ','+ currTimestamp.toString());
                     //kvStore.delete(id);
-                    System.out.println(id+','+new_value+','+ "PIU_10_min");
+                    //System.out.println(id+','+new_value+','+ "PIU_10_min");
                     kvStore.put(id,new_value);
                     
                     return new KeyValue<String,String>(id,new_value);

@@ -3,7 +3,7 @@ package com.example;
 
 import java.time.Duration;
 
-import java.util.Arrays;
+//import java.util.Arrays;
 
 
 import org.apache.kafka.streams.KeyValue;
@@ -50,14 +50,16 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
                 
         } else {
             final String[] kvStoreData = kvStore.get(id).split(",");
-            System.out.println(id+" "+Arrays.toString(kvStoreData));
+            //System.out.println(id+" "+Arrays.toString(kvStoreData));
             Long startTimestamp = Long.parseLong(kvStoreData[0]);
             Long precTimestamp = Long.parseLong(kvStoreData[1]);
             Long currTimestamp = Long.parseLong(value.getTimestamp());
+            Long difference = (currTimestamp - startTimestamp)/(60 * 1000);
+
 
             if (this.FishingArea.is_in_FishingArea(value)){
                 if (currTimestamp -precTimestamp <= Duration.ofMinutes(10).toMillis()){
-                    String new_value_insert =String.format(startTimestamp.toString() + ','+ currTimestamp.toString());
+                    String new_value_insert =String.format(startTimestamp.toString() + ','+ currTimestamp.toString()+','+Long.toString(difference));
                     kvStore.put(id,new_value_insert);
                     //System.out.println(id+','+new_value_insert+','+ "MENO_10_min");
                     return new KeyValue<String,String>(id,new_value_insert);
@@ -73,7 +75,7 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
             }else{
                 kvStore.delete(id);
                 //System.out.println(id+','+ "FALSO");
-                return new KeyValue<String,String>(id,String.format(startTimestamp.toString() + ','+ currTimestamp.toString()));
+                return new KeyValue<String,String>(id,String.format(startTimestamp.toString() + ','+ currTimestamp.toString()+','+Long.toString(difference)));
             }
             //context.forward(id, new_value);
         }
