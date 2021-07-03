@@ -18,7 +18,7 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
 
     private ProcessorContext context;
     private KeyValueStore<String, String> kvStore;
-    final FishingArea FishingArea = new FishingArea();
+    
     // private KeyValueStore<String, Integer> kvStore;
 
     
@@ -27,7 +27,6 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
     public void init(ProcessorContext context) {
         this.context = context;
         System.out.println("__________________sto inizializzando");
-
         this.kvStore = context.getStateStore("whithinArea_store");
         this.kvStore.flush();
         
@@ -40,7 +39,7 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
         String id = value.getId();
         String new_value;
         if (this.kvStore.get(id)==null){
-            if (this.FishingArea.is_in_FishingArea(value)){
+            if (Application.FishingArea.is_in_FishingArea(value)){
                 new_value = String.format(value.getTimestamp() +','+ value.getTimestamp());
                 //System.out.println(id+','+new_value+','+ "NUOVA FINESTRA");
                 kvStore.put(id, new_value);
@@ -57,7 +56,7 @@ public class WindowTransfWithinArea implements Transformer<String, AISMessage,Ke
             Long difference = (currTimestamp - startTimestamp)/(60 * 1000);
 
 
-            if (this.FishingArea.is_in_FishingArea(value)){
+            if (Application.FishingArea.is_in_FishingArea(value)){
                 if (currTimestamp -precTimestamp <= Duration.ofMinutes(10).toMillis()){
                     String new_value_insert =String.format(startTimestamp.toString() + ','+ currTimestamp.toString()+','+Long.toString(difference));
                     kvStore.put(id,new_value_insert);

@@ -72,7 +72,7 @@ public class AISProducer extends Thread {
                     }
                     message_next = this.read();
                 }
-                Thread.sleep(1000);
+                Thread.sleep(100);
                 //System.out.println("2 SECONDI");
                 producer.send(data_to_publish);
                 //final ProducerRecord<String, String> data_to_publish = new ProducerRecord<>(AISProcessorDemo.IN_TOPIC, data.get(2), data_read);

@@ -43,9 +43,10 @@ public class Application {
     static final String TIME_TRAWL_TOPIC = "time-trawl";
     static final String TRAWLING_RESULT_TOPIC = "trawling-result";
     static final String TEST = "test";
-    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_type_test_4.csv";
+    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_type_oct_1.csv";
     static final String APP_NAME = "ais-stream";
     static final String BROKER = "localhost:9092";
+    static final FishingArea FishingArea= new FishingArea();
   
     private static boolean TypeshipCheck(AISMessage v){
         String type = v.getType();
@@ -75,12 +76,7 @@ public class Application {
 
     public static void main(final String[] args){
         
-        try {
-            new AISProducer(Application.PATH);
-        } catch (CsvValidationException | IOException e) {
-            e.printStackTrace();
-        }
- 
+        
         Properties props = streamConfig();
         Topology stream_Topology = buildTopology(props);
         final KafkaStreams streams = new KafkaStreams(stream_Topology, props);
@@ -91,6 +87,13 @@ public class Application {
         
         streams.cleanUp();
         streams.start();
+
+        try {
+            new AISProducer(Application.PATH);
+        } catch (CsvValidationException | IOException e) {
+            e.printStackTrace();
+        }
+ 
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
     }
 
@@ -169,7 +172,7 @@ public class Application {
         
         //TRAWILING MOVEMENT JOIN
         KStream<String, String> trawlingMovement = whitinArea.join(headingChange,windowJoiner, 
-        JoinWindows.of(Duration.ofMillis(1000)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join"));
+        JoinWindows.of(Duration.ofMillis(100)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join"));
         
         //FILTER TRAWILING MOVEMENT WINDOW WITH LESS THAN 10 MINUTE
         KStream<String, String> trawlingMovement_filter = trawlingMovement.filter(new Predicate<String,String>(){
@@ -195,7 +198,7 @@ public class Application {
 
         //TRAWLING JOIN
         KStream<String, String> trawling = trawlSpeed.join(trawlingMovement_filter,windowJoiner, 
-        JoinWindows.of(Duration.ofMillis(1000)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join"));
+        JoinWindows.of(Duration.ofMillis(100)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join"));
         
         trawling.to(Application.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         source.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
@@ -218,7 +221,7 @@ public class Application {
                 final String[] data = value.split(",");
                 Long startTimestamp = Long.parseLong(data[0]);
                 Long endTimestamp = Long.parseLong(data[1]);
-                if(endTimestamp-startTimestamp>= Duration.ofMinutes(60).toMillis())
+                if(endTimestamp-startTimestamp>= Duration.ofMinutes(15).toMillis())
                     return true;
                 return false;
             }

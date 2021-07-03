@@ -1,7 +1,7 @@
 package com.example;
 
 
-import java.time.Duration;
+
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -41,13 +41,13 @@ public class WindowResultTrawling implements Transformer<String, String,KeyValue
             final String[] value_data = value.split(",");
             String time_start = value_data[0];
             String time_start_store = kvStoreData[0];
-            System.out.println(time_start+","+time_start_store);
+            //System.out.println(time_start+","+time_start_store);
             if(time_start.equals(time_start_store)){
                 kvStore.put(key,value);
-                System.out.println("sto aggiornando");
+                //System.out.println("sto aggiornando");
             }else{
                 kvStore.put(key,value);
-                System.out.println("sto pubblicando");
+                //System.out.println("sto pubblicando");
                 return new KeyValue<String,String>(key,kvstore_string);
             }
             //context.forward(id, new_value);
