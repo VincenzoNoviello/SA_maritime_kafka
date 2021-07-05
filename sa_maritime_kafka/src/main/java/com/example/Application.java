@@ -215,6 +215,7 @@ public class Application {
             }
             
         }, Named.as("trawling_result") ,"trawling_result_store");
+        
         trawling_result.filter((k,v) -> v != null).filter(new Predicate<String,String>(){
             @Override
             public boolean test(String key, String value) {
