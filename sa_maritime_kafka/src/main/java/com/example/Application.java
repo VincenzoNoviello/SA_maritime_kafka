@@ -43,7 +43,7 @@ public class Application {
     static final String TIME_TRAWL_TOPIC = "time-trawl";
     static final String TRAWLING_RESULT_TOPIC = "trawling-result";
     static final String TEST = "test";
-    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_type_oct_1.csv";
+    static final String PATH = "/home/mivia/Desktop/ais_data/ais_data_type_oct_4.csv";
     static final String APP_NAME = "ais-stream";
     static final String BROKER = "localhost:9092";
     static final FishingArea FishingArea= new FishingArea();
@@ -106,8 +106,6 @@ public class Application {
         props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         // Set to latest so we analyze only live data (useful for test)
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-        // disable caching to see session merging
-        //props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         
         return props;
     }
@@ -143,15 +141,11 @@ public class Application {
                  Serdes.String());
         builder.addStateStore(keyValueStoreBuilder_trawling_result);
 
-      
         //STREAM SOURCE
         final KStream<String, AISMessage> source = builder.stream(Application.IN_TOPIC, 
             Consumed.with(Serdes.String(),AISSerders.AISMessage())
-            .withTimestampExtractor(new CustomExtractor()).withName(Application.IN_TOPIC))
+            .withName(Application.IN_TOPIC))
             .filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
-        
-        //FILTER FISHING VESSEL
-        //final KStream<String, AISMessage> sourceFishing = source.filter((k,v) -> Application.TypeshipCheck(v),Named.as("TypeshipCheck"));
         
         // WHITHIN AREA TRANSFORMER
         final KStream<String, String> whitinArea = source.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
@@ -172,10 +166,8 @@ public class Application {
         
         //TRAWILING MOVEMENT JOIN
         KStream<String, String> trawlingMovement = whitinArea.join(headingChange,windowJoiner, 
-        JoinWindows.of(Duration.ofMillis(100)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join"));
-        
-        //FILTER TRAWILING MOVEMENT WINDOW WITH LESS THAN 10 MINUTE
-        KStream<String, String> trawlingMovement_filter = trawlingMovement.filter(new Predicate<String,String>(){
+        JoinWindows.of(Duration.ofMillis(100)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-movement-join"))
+        .filter(new Predicate<String,String>(){
             @Override
             public boolean test(String key, String value) {
                 final String[] data = value.split(",");
@@ -185,7 +177,7 @@ public class Application {
                     return true;
                 return false;
             }
-        });
+        },Named.as("10_min_TrawlingMovement"));
 
         //TRAWLSPEED TRANSFORMER
         final KStream<String, String> trawlSpeed = source.transform(new TransformerSupplier<String,AISMessage,KeyValue<String,String>>(){
@@ -197,13 +189,13 @@ public class Application {
         }, Named.as("processor_speed") ,"trawlSpeed_store");
 
         //TRAWLING JOIN
-        KStream<String, String> trawling = trawlSpeed.join(trawlingMovement_filter,windowJoiner, 
+        KStream<String, String> trawling = trawlSpeed.join(trawlingMovement,windowJoiner, 
         JoinWindows.of(Duration.ofMillis(100)),StreamJoined.with(Serdes.String(),Serdes.String(),Serdes.String()).withName("Trawling-join"));
         
         trawling.to(Application.OUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         source.to(Application.TEST, Produced.with(Serdes.String(), AISSerders.AISMessage()));   
         trawlSpeed.filter((k,v) -> v != null).to(Application.TRAWL_SPEED_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-        trawlingMovement_filter.to(Application.TRAWLING_MOVEMENT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        trawlingMovement.to(Application.TRAWLING_MOVEMENT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         whitinArea.to(Application.WITHIN_AREA_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
         headingChange.to(Application.CHANGE_HEADING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
@@ -214,8 +206,10 @@ public class Application {
                 return new WindowResultTrawling();
             }
             
-        }, Named.as("trawling_result") ,"trawling_result_store");
-        trawling_result.filter((k,v) -> v != null).filter(new Predicate<String,String>(){
+        }, Named.as("trawling_result") ,"trawling_result_store")
+        .filter((k,v) -> v != null,Named.as("remove_null"));
+
+        trawling_result.filter(new Predicate<String,String>(){
             @Override
             public boolean test(String key, String value) {
                 final String[] data = value.split(",");
@@ -225,7 +219,7 @@ public class Application {
                     return true;
                 return false;
             }
-        }).to(Application.TRAWLING_RESULT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        },Named.as("15_min_trawling")).to(Application.TRAWLING_RESULT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         return builder.build(props);
 

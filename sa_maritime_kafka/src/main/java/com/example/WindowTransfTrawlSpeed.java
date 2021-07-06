@@ -13,7 +13,6 @@ public class WindowTransfTrawlSpeed implements Transformer<String, AISMessage,Ke
     private ProcessorContext context;
     private KeyValueStore<String, String> kvStore;
     final FishingArea FishingArea = new FishingArea();
-    // private KeyValueStore<String, Integer> kvStore;
     static final float SPEED_MIN = 1.0f;
     static final float SPEED_MAX = 9.0f;
 
@@ -65,7 +64,7 @@ public class WindowTransfTrawlSpeed implements Transformer<String, AISMessage,Ke
                     String new_value_insert =String.format(startTimestamp.toString() + ','+ currTimestamp.toString());
                     kvStore.put(id,new_value_insert);
                     //System.out.println(id+','+new_value_insert+','+ "MENO_10_min");
-                    kvStore.put(id,new_value_insert);
+                    //kvStore.put(id,new_value_insert);
                     return new KeyValue<String,String>(id,new_value_insert+","+Long.toString(difference));
                     //System.out.println(id+','+new_value+','+ "PIU_10_min");
             }else{
